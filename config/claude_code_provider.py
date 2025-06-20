@@ -76,13 +76,9 @@ class ClaudeCodeSDKProvider(CustomLLM):
         
         response_content = ""
         
-        # Get the appropriate query function (they return AsyncIterators directly)
-        if not os.environ.get('ANTHROPIC_API_KEY'):
-            # Use OAuth authentication
-            message_iterator = query_with_oauth(prompt=prompt, options=options)
-        else:
-            # Use API key authentication
-            message_iterator = query(prompt=prompt, options=options)
+        # Always use the regular query function - it will handle auth appropriately
+        # The SDK will use the mounted .claude.json file if available
+        message_iterator = query(prompt=prompt, options=options)
         
         # Iterate through messages
         async for message in message_iterator:
@@ -119,13 +115,9 @@ class ClaudeCodeSDKProvider(CustomLLM):
         
         accumulated_content = ""
         
-        # Get the appropriate query function (they return AsyncIterators directly)
-        if not os.environ.get('ANTHROPIC_API_KEY'):
-            # Use OAuth authentication
-            message_iterator = query_with_oauth(prompt=prompt, options=options)
-        else:
-            # Use API key authentication
-            message_iterator = query(prompt=prompt, options=options)
+        # Always use the regular query function - it will handle auth appropriately
+        # The SDK will use the mounted .claude.json file if available
+        message_iterator = query(prompt=prompt, options=options)
         
         # Iterate through messages
         async for message in message_iterator:
