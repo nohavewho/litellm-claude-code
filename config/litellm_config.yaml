@@ -1,0 +1,25 @@
+model_list:
+  - model_name: "sonnet"
+    litellm_params:
+      model: "claude-code-sdk/sonnet"
+  
+  - model_name: "claude-3-5-haiku-20240307"
+    litellm_params:
+      model: "claude-code-sdk/claude-3-5-haiku-20240307"
+  
+  - model_name: "opus"
+    litellm_params:
+      model: "claude-code-sdk/opus"
+  
+  - model_name: "default"
+    litellm_params:
+      model: "claude-code-sdk/default"
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+litellm_settings:
+  drop_params: true
+  success_callback: []
+  custom_provider_map:
+  - {"provider": "claude-code-sdk", "custom_handler": custom_handler.my_custom_llm}
