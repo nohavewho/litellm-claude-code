@@ -25,9 +25,6 @@ services:
       - ./providers:/app/providers:ro
       # Persistent volume for Claude authentication
       - claude_auth:/root/.claude_code
-      # Optional: Mount host auth as fallback (read-only)
-      - ~/.claude_code:/root/.claude_code_host:ro
-      - ~/.claude.json:/root/.claude.json_host:ro
     env_file:
       - .env
     depends_on:

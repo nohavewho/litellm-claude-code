@@ -28,9 +28,8 @@ COPY claude_code_provider.py /app/claude_code_provider.py
 COPY custom_handler.py /app/custom_handler.py
 COPY config/ /app/config/
 
-# Copy startup script, auth checker, and entrypoint
+# Copy startup script and entrypoint
 COPY startup.py /app/startup.py
-COPY check_auth.py /app/check_auth.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
