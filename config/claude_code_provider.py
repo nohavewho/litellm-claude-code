@@ -2,12 +2,10 @@ import asyncio
 from typing import Dict, List
 import litellm
 from litellm import CustomLLM, ModelResponse, Usage
-from litellm.types.utils import Choices, Message as LiteLLMMessage, GenericStreamingChunk
-from typing import Iterator, AsyncIterator
+from litellm.types.utils import Choices, Message as LiteLLMMessage
 
-from claude_code_sdk import query, query_with_oauth, ClaudeCodeOptions
+from claude_code_sdk import query, ClaudeCodeOptions
 from claude_code_sdk.types import AssistantMessage, TextBlock
-import os
 
 class ClaudeCodeSDKProvider(CustomLLM):
     """LiteLLM provider for Claude Code SDK with proper model selection."""
@@ -75,85 +73,29 @@ class ClaudeCodeSDKProvider(CustomLLM):
         options = ClaudeCodeOptions(model=claude_model)
         
         response_content = ""
-        
-        # Get the appropriate query function (they return AsyncIterators directly)
-        if not os.environ.get('ANTHROPIC_API_KEY'):
-            # Use OAuth authentication
-            message_iterator = query_with_oauth(prompt=prompt, options=options)
-        else:
-            # Use API key authentication
-            message_iterator = query(prompt=prompt, options=options)
-        
-        # Iterate through messages
-        async for message in message_iterator:
+        async for message in query(prompt=prompt, options=options):
             if isinstance(message, AssistantMessage):
                 for block in message.content:
                     if isinstance(block, TextBlock):
                         response_content += block.text
         
         return self.create_litellm_response(response_content, model)
-    
-    def streaming(self, model: str, messages: List[Dict], **kwargs) -> Iterator[GenericStreamingChunk]:
-        """Sync streaming wrapper - converts async to sync."""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            # Create an async generator and convert to sync
-            async_gen = self.astreaming(model, messages, **kwargs)
-            while True:
-                try:
-                    chunk = loop.run_until_complete(async_gen.__anext__())
-                    yield chunk
-                except StopAsyncIteration:
-                    break
-        finally:
-            loop.close()
-    
-    async def astreaming(self, model: str, messages: List[Dict], **kwargs) -> AsyncIterator[GenericStreamingChunk]:
-        """Async streaming using Claude Code SDK."""
-        prompt = self.format_messages_to_prompt(messages)
-        claude_model = self.extract_claude_model(model)
-        
-        # Create options with proper model selection
-        options = ClaudeCodeOptions(model=claude_model)
-        
-        accumulated_content = ""
-        
-        # Get the appropriate query function (they return AsyncIterators directly)
-        if not os.environ.get('ANTHROPIC_API_KEY'):
-            # Use OAuth authentication
-            message_iterator = query_with_oauth(prompt=prompt, options=options)
-        else:
-            # Use API key authentication
-            message_iterator = query(prompt=prompt, options=options)
-        
-        # Iterate through messages
-        async for message in message_iterator:
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        # Yield each piece of text as it comes
-                        chunk_text = block.text[len(accumulated_content):]
-                        if chunk_text:
-                            accumulated_content = block.text
-                            yield GenericStreamingChunk(
-                                text=chunk_text,
-                                is_finished=False,
-                                finish_reason=None,
-                                usage=None,
-                                index=0,
-                                tool_use=None
-                            )
-        
-        # Final chunk to indicate completion
-        yield GenericStreamingChunk(
-            text="",
-            is_finished=True,
-            finish_reason="stop",
-            usage={"completion_tokens": 50, "prompt_tokens": 100, "total_tokens": 150},
-            index=0,
-            tool_use=None
-        )
 
-# Don't register here - let the YAML config handle it
-# This avoids duplicate registrations
+# Register provider
+def register_provider():
+    claude_provider = ClaudeCodeSDKProvider()
+    
+    if not hasattr(litellm, 'custom_provider_map'):
+        litellm.custom_provider_map = []
+    
+    litellm.custom_provider_map.append({
+        "provider": "claude-code-sdk",
+        "custom_handler": claude_provider
+    })
+    
+    print(f"Registered custom provider: {litellm.custom_provider_map}")
+
+register_provider()
+
+# Create provider instance for YAML config
+provider_instance = ClaudeCodeSDKProvider()
