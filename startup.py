@@ -29,11 +29,17 @@ print("Starting LiteLLM proxy with YAML config...")
 if __name__ == "__main__":
     os.environ['CONFIG_FILE_PATH'] = '/app/config/litellm_config.yaml'
     
-    # Set default development master key if not provided
+    # Check for required master key
     if not os.environ.get('LITELLM_MASTER_KEY'):
-        print("[STARTUP] WARNING: No LITELLM_MASTER_KEY set, using development default 'sk-development-only'")
-        print("[STARTUP] For production, set a secure key using: openssl rand -hex 32")
-        os.environ['LITELLM_MASTER_KEY'] = 'sk-development-only'
+        print("[STARTUP] ERROR: LITELLM_MASTER_KEY environment variable is required")
+        print("[STARTUP] This key protects access to your authenticated Claude instance.")
+        print("[STARTUP] ")
+        print("[STARTUP] To set it:")
+        print("[STARTUP] 1. Copy .env.example to .env and set your own key")
+        print("[STARTUP] 2. Or set environment variable: LITELLM_MASTER_KEY=<your-key> docker-compose up")
+        print("[STARTUP] ")
+        print("[STARTUP] Generate a secure key with: openssl rand -hex 32")
+        sys.exit(1)
     
     # Import litellm and ensure custom provider is registered
     import litellm

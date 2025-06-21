@@ -14,28 +14,38 @@ A generic LiteLLM provider that makes Claude Code SDK available through the stan
 
 ### Prerequisites
 - Docker and Docker Compose
+- A master key for API authentication (required)
 
 ### Setup
 
-1. Start the services:
+1. **Set your master key** (REQUIRED - see [docs/SECURITY.md](docs/SECURITY.md)):
+   ```bash
+   # Generate a secure key
+   openssl rand -hex 32
+   
+   # Set it as environment variable
+   export LITELLM_MASTER_KEY="your-generated-key"
+   ```
+
+2. Start the services:
    ```bash
    docker-compose up -d
    ```
 
-2. **Authenticate Claude** (first-time only):
+3. **Authenticate Claude** (first-time only):
    - Navigate to `http://localhost:4000/auth`
    - Click "Start Authentication"
    - Follow the OAuth flow in your browser
    - See [AUTH_SETUP.md](AUTH_SETUP.md) for detailed instructions
 
-3. The API is now available at `http://localhost:4000/v1`
+4. The API is now available at `http://localhost:4000/v1`
 
 ### Test with curl
 
 ```bash
 curl -X POST http://localhost:4000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-dummy" \
+  -H "Authorization: Bearer your-master-key" \
   -d '{
     "model": "claude-sonnet",
     "messages": [{"role": "user", "content": "Hello"}]
@@ -48,7 +58,7 @@ curl -X POST http://localhost:4000/v1/chat/completions \
 import openai
 
 client = openai.OpenAI(
-    api_key="sk-dummy",
+    api_key="your-master-key",
     base_url="http://localhost:4000/v1"
 )
 

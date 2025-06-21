@@ -1,50 +1,43 @@
 # Security Best Practices
 
+## Critical Security Requirement
+
+**The LITELLM_MASTER_KEY is REQUIRED and protects access to your authenticated Claude instance.** Since the Claude OAuth provides real API access, anyone with the master key can use your Claude authentication. There is no default key - you must set one.
+
 ## Master Key Configuration
 
-The LiteLLM master key is used to authenticate API requests. Here's how to handle it securely:
+### Why It's Required
 
-### Development
-For local development, the system will use a default key `sk-development-only` if no key is provided. This is logged as a warning on startup.
+The LiteLLM master key serves as the authentication barrier between the public API and your private Claude OAuth credentials. Without it, anyone could access your authenticated Claude instance.
 
-### Production
+### Setting Up Your Key
 
 1. **Generate a secure key:**
    ```bash
-   # Using OpenSSL
+   # Using OpenSSL (recommended)
    openssl rand -hex 32
    
    # Using Python
    python -c "import secrets; print(secrets.token_hex(32))"
    ```
 
-2. **Set the key via environment variable:**
-   - Never commit the actual key to version control
-   - Use `.env` file (which is gitignored) for local development
-   - Use environment variables or secret management systems in production
-
-3. **Configuration methods (in order of preference):**
+2. **Configuration methods:**
    
-   a. **Environment Variable** (Recommended for production)
+   **For Production** (Environment Variable - Recommended)
    ```bash
-   export LITELLM_MASTER_KEY="your-secure-key-here"
-   docker-compose up -d
+   LITELLM_MASTER_KEY="your-secure-key-here" docker-compose up -d
    ```
    
-   b. **Docker Compose Override** (For local development)
-   Create `docker-compose.override.yml` (gitignored):
-   ```yaml
-   services:
-     litellm:
-       environment:
-         - LITELLM_MASTER_KEY=your-secure-key-here
-   ```
-   
-   c. **.env File** (For local development)
+   **For Development** (.env File)
    ```bash
    cp .env.example .env
-   # Edit .env and set LITELLM_MASTER_KEY
+   # Edit .env and replace 'your-secret-key-here' with your actual key
+   docker-compose up -d
    ```
+
+3. **The system will not start without a key**
+   - No fallback or default keys are provided
+   - This is intentional for security
 
 ## Best Practices
 
