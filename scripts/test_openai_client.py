@@ -9,7 +9,7 @@ import json
 # Create OpenAI client pointing to LiteLLM
 client = OpenAI(
     base_url="http://localhost:4000/v1",
-    api_key="sk-1234"
+    api_key="sk-1234"  # Replace with your actual master key
 )
 
 print("Testing LiteLLM-Claude as OpenAI API...\n")

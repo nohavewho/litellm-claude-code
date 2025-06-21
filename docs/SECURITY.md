@@ -10,28 +10,36 @@
 
 The LiteLLM master key serves as the authentication barrier between the public API and your private Claude OAuth credentials. Without it, anyone could access your authenticated Claude instance.
 
+### Key Format Requirements
+
+**All LiteLLM master keys MUST start with 'sk-'**. This is a hard requirement enforced by LiteLLM.
+
 ### Setting Up Your Key
 
 1. **Generate a secure key:**
    ```bash
-   # Using OpenSSL (recommended)
-   openssl rand -hex 32
+   # For production (using OpenSSL)
+   echo "sk-$(openssl rand -hex 32)"
    
-   # Using Python
-   python -c "import secrets; print(secrets.token_hex(32))"
+   # For production (using Python)
+   python -c "import secrets; print('sk-' + secrets.token_hex(32))"
+   
+   # For development (simple memorable key)
+   export LITELLM_MASTER_KEY="sk-dev-test-key"
    ```
 
 2. **Configuration methods:**
    
    **For Production** (Environment Variable - Recommended)
    ```bash
-   LITELLM_MASTER_KEY="your-secure-key-here" docker-compose up -d
+   LITELLM_MASTER_KEY="sk-$(openssl rand -hex 32)" docker-compose up -d
    ```
    
    **For Development** (.env File)
    ```bash
    cp .env.example .env
-   # Edit .env and replace 'your-secret-key-here' with your actual key
+   # Edit .env and replace 'sk-your-secret-key-here' with your actual key
+   # Example: LITELLM_MASTER_KEY=sk-dev-test-key
    docker-compose up -d
    ```
 

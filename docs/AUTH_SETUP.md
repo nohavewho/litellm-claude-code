@@ -56,7 +56,7 @@ After authentication, you can:
    ```bash
    curl -X POST http://localhost:4000/v1/chat/completions \
      -H "Content-Type: application/json" \
-     -H "Authorization: Bearer sk-1234" \
+     -H "Authorization: Bearer sk-your-master-key" \
      -d '{
        "model": "sonnet",
        "messages": [{"role": "user", "content": "Hello Claude!"}]
@@ -88,8 +88,9 @@ After authentication, you can:
 ## Security Notes
 
 - Never expose port 4000 to the public internet without proper security
-- The Bearer token (sk-1234) is for local development only
-- For production, implement proper API key management in LiteLLM
+- Master keys must start with 'sk-' (LiteLLM requirement)
+- Set your own master key via LITELLM_MASTER_KEY environment variable
+- For production, use a secure randomly generated key
 
 ## Available Models
 

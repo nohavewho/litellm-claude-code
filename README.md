@@ -20,11 +20,11 @@ A generic LiteLLM provider that makes Claude Code SDK available through the stan
 
 1. **Set your master key** (REQUIRED - see [docs/SECURITY.md](docs/SECURITY.md)):
    ```bash
-   # Generate a secure key
-   openssl rand -hex 32
+   # Generate a secure key (must start with 'sk-')
+   export LITELLM_MASTER_KEY="sk-$(openssl rand -hex 32)"
    
-   # Set it as environment variable
-   export LITELLM_MASTER_KEY="your-generated-key"
+   # Or for development, use a simple key
+   export LITELLM_MASTER_KEY="sk-dev-test-key"
    ```
 
 2. Start the services:
@@ -45,7 +45,7 @@ A generic LiteLLM provider that makes Claude Code SDK available through the stan
 ```bash
 curl -X POST http://localhost:4000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-master-key" \
+  -H "Authorization: Bearer sk-your-master-key" \
   -d '{
     "model": "claude-sonnet",
     "messages": [{"role": "user", "content": "Hello"}]
@@ -58,7 +58,7 @@ curl -X POST http://localhost:4000/v1/chat/completions \
 import openai
 
 client = openai.OpenAI(
-    api_key="your-master-key",
+    api_key="sk-your-master-key",
     base_url="http://localhost:4000/v1"
 )
 
