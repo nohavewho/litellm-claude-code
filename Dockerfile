@@ -19,8 +19,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Claude Code SDK from GitHub
-RUN pip install --no-cache-dir git+https://github.com/arthurcolle/claude-code-sdk-python.git
+# Install Claude Code SDK from PyPI
+RUN pip install --no-cache-dir claude-code-sdk
 
 # Copy provider code
 COPY claude_code_provider.py /app/claude_code_provider.py
