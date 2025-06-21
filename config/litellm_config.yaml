@@ -3,9 +3,15 @@ model_list:
     litellm_params:
       model: "claude-code-sdk/sonnet"
   
-  - model_name: "claude-3-5-haiku-20240307"
-    litellm_params:
-      model: "claude-code-sdk/claude-3-5-haiku-20240307"
+  # Haiku model temporarily disabled - uncomment when available
+  # - model_name: "haiku"
+  #   litellm_params:
+  #     model: "claude-code-sdk/haiku"
+  
+  # Legacy model name - remove when haiku is available  
+  # - model_name: "claude-3-5-haiku-20240307"
+  #   litellm_params:
+  #     model: "claude-code-sdk/claude-3-5-haiku-20240307"
   
   - model_name: "opus"
     litellm_params:

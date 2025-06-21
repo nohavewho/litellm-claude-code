@@ -99,4 +99,4 @@ Once authenticated, you can use:
 - `opus` - Claude Opus (latest)
 - `default` - Default model
 
-Note: Haiku model is currently disabled upstream in Claude Code.
+**Note:** Haiku model is temporarily disabled upstream in Claude Code. When restored, it will be available as `haiku`.

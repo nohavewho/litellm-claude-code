@@ -77,7 +77,8 @@ print(response.choices[0].message.content)
 | `sonnet` | Claude Sonnet (latest version) |
 | `opus` | Claude Opus (latest version) |
 | `default` | Default Claude model |
-| `claude-3-5-haiku-20240307` | Haiku (currently disabled upstream) |
+
+**Note:** Haiku model is temporarily disabled upstream in Claude Code. It will be available as `haiku` when restored.
 
 ## Configuration
 

@@ -23,7 +23,7 @@ for model in models.data:
 print("\n" + "="*50 + "\n")
 
 # Test each model
-test_models = ["sonnet", "opus", "claude-3-5-haiku-20240307"]
+test_models = ["sonnet", "opus"]  # "haiku" - uncomment when available
 
 for model_name in test_models:
     print(f"Testing model: {model_name}")
