@@ -6,17 +6,18 @@ We've discovered a fundamental disconnect between the Claude Code SDK's OAuth sy
 
 ## Key Findings
 
-1. **SDK Relies on CLI Authentication**:
-   - The SDK uses the Claude CLI as a subprocess for all operations
-   - The SDK's `claude-auth` command likely wraps or manages the CLI's auth flow
-   - Authentication must ultimately satisfy the CLI's requirements
-   - The CLI stores auth in `~/.claude/.credentials.json`
+1. **SDK Has Its Own OAuth Implementation**:
+   - The SDK's `claude-auth` command implements a complete OAuth flow
+   - Opens browser, runs callback server, exchanges code for tokens
+   - Stores OAuth tokens in `~/.claude_code/tokens.json`
+   - This is completely separate from the CLI's authentication
 
-2. **The SDK's Token Management**:
-   - The SDK stores tokens in `~/.claude_code/tokens.json` 
-   - This may be a reformatted version of the CLI's auth data
-   - The SDK comment: "The CLI would need to be modified to support OAuth tokens"
-   - Currently tries to pass tokens as `ANTHROPIC_API_KEY` with "Bearer" prefix
+2. **The Fundamental Disconnect**:
+   - The SDK uses the Claude CLI as a subprocess for all operations
+   - The SDK tries to pass its OAuth tokens as `ANTHROPIC_API_KEY: Bearer <token>`
+   - The CLI doesn't accept OAuth tokens in this format
+   - As noted in the code: "The CLI would need to be modified to support OAuth tokens"
+   - The CLI requires its own authentication (stored in `~/.claude/.credentials.json`)
 
 3. **The Core Problem**:
    - The CLI requires interactive authentication (browser-based OAuth)
