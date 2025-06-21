@@ -1,8 +1,8 @@
 import asyncio
-from typing import Dict, List
+from typing import Dict, List, Iterator, AsyncIterator, Any
 import litellm
 from litellm import CustomLLM, ModelResponse, Usage
-from litellm.types.utils import Choices, Message as LiteLLMMessage
+from litellm.types.utils import Choices, Message as LiteLLMMessage, GenericStreamingChunk, Delta
 
 from claude_code_sdk import query, ClaudeCodeOptions
 from claude_code_sdk.types import AssistantMessage, TextBlock
@@ -80,6 +80,94 @@ class ClaudeCodeSDKProvider(CustomLLM):
                         response_content += block.text
         
         return self.create_litellm_response(response_content, model)
+    
+    def streaming(self, model: str, messages: List[Dict], **kwargs) -> Iterator[GenericStreamingChunk]:
+        """Sync streaming - not supported, will raise error."""
+        raise NotImplementedError("Sync streaming is not supported. Use async streaming instead.")
+    
+    async def astreaming(self, model: str, messages: List[Dict], **kwargs) -> AsyncIterator[GenericStreamingChunk]:
+        """Async streaming using Claude Code SDK."""
+        prompt = self.format_messages_to_prompt(messages)
+        claude_model = self.extract_claude_model(model)
+        
+        # Create options with proper model selection
+        options = ClaudeCodeOptions(model=claude_model)
+        
+        chunk_index = 0
+        total_content = ""
+        
+        async for message in query(prompt=prompt, options=options):
+            # Only process AssistantMessage with TextBlock content
+            # Skip other message types (SystemMessage, UserMessage, etc.)
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        content = block.text
+                        total_content += content
+                        
+                        # Split large blocks into smaller chunks for smoother streaming
+                        # This is a workaround for the SDK providing large chunks
+                        if len(content) > 50:
+                            # Split into roughly 20-50 character chunks
+                            words = content.split(' ')
+                            current_chunk = ""
+                            for word in words:
+                                if len(current_chunk) + len(word) > 30:
+                                    if current_chunk:
+                                        chunk: GenericStreamingChunk = {
+                                            "text": current_chunk + " ",
+                                            "is_finished": False,
+                                            "finish_reason": None,
+                                            "index": 0,
+                                            "tool_use": None,
+                                            "usage": None
+                                        }
+                                        chunk_index += 1
+                                        yield chunk
+                                    current_chunk = word
+                                else:
+                                    current_chunk = current_chunk + " " + word if current_chunk else word
+                            
+                            # Yield remaining content
+                            if current_chunk:
+                                chunk: GenericStreamingChunk = {
+                                    "text": current_chunk,
+                                    "is_finished": False,
+                                    "finish_reason": None,
+                                    "index": 0,
+                                    "tool_use": None,
+                                    "usage": None
+                                }
+                                chunk_index += 1
+                                yield chunk
+                        else:
+                            # For small blocks, yield as-is
+                            chunk: GenericStreamingChunk = {
+                                "text": content,
+                                "is_finished": False,
+                                "finish_reason": None,
+                                "index": 0,
+                                "tool_use": None,
+                                "usage": None
+                            }
+                            chunk_index += 1
+                            yield chunk
+        
+        # Send final chunk with finish_reason
+        final_chunk: GenericStreamingChunk = {
+            "text": "",
+            "is_finished": True,
+            "finish_reason": "stop",
+            "index": 0,
+            "tool_use": None,
+            "usage": {
+                "completion_tokens": len(total_content.split()),
+                "prompt_tokens": 100,
+                "total_tokens": 100 + len(total_content.split())
+            }
+        }
+        
+        yield final_chunk
 
 # Register provider
 def register_provider():
