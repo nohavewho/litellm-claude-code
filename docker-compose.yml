@@ -23,6 +23,11 @@ services:
       - ./config:/app/config:ro
       # Mount provider code for development
       - ./providers:/app/providers:ro
+      # TEMPORARY - Mount host OAuth credentials for testing
+      # Mount the entire .claude directory to include credentials.json
+      # The CLI stores OAuth tokens in ~/.claude/.credentials.json
+      # TODO: Replace with proper OAuth solution for production
+      - ~/.claude:/root/.claude
     env_file:
       - .env
     depends_on:

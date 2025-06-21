@@ -1,0 +1,83 @@
+# OAuth Investigation for Claude Code in Docker
+
+## Current Status
+
+We've discovered a fundamental disconnect between the Claude Code SDK's OAuth system and the Claude CLI's authentication requirements.
+
+## Key Findings
+
+1. **SDK Relies on CLI Authentication**:
+   - The SDK uses the Claude CLI as a subprocess for all operations
+   - The SDK's `claude-auth` command likely wraps or manages the CLI's auth flow
+   - Authentication must ultimately satisfy the CLI's requirements
+   - The CLI stores auth in `~/.claude/.credentials.json`
+
+2. **The SDK's Token Management**:
+   - The SDK stores tokens in `~/.claude_code/tokens.json` 
+   - This may be a reformatted version of the CLI's auth data
+   - The SDK comment: "The CLI would need to be modified to support OAuth tokens"
+   - Currently tries to pass tokens as `ANTHROPIC_API_KEY` with "Bearer" prefix
+
+3. **The Core Problem**:
+   - The CLI requires interactive authentication (browser-based OAuth)
+   - Docker containers can't perform interactive auth flows
+   - The SDK can't bypass the CLI's authentication requirements
+   - We need the CLI to be pre-authenticated before the SDK can use it
+
+## Working Solution
+
+By mounting the host's `~/.claude` directory (not just `~/.claude.json`), we can share the CLI's OAuth credentials with the container. The key file is `~/.claude/.credentials.json` which contains the OAuth tokens from the CLI's interactive authentication.
+
+### Confirmed Working:
+- ✅ Sonnet model: `curl -X POST http://localhost:4000/v1/chat/completions -d '{"model": "sonnet", ...}'`
+- ✅ Opus model: Working correctly
+- ⚠️ Haiku model: Currently disabled upstream in Claude Code (as of last 19 hours)
+
+### Model Names:
+- `sonnet`, `opus`, and `default` are aliases for the latest versions (like `:latest` tags)
+- Haiku previously required exact model name specification (e.g., `claude-3-5-haiku-20240307`)
+- TODO: Check for updated haiku model name when re-enabled upstream
+
+## Potential Production Solutions
+
+### Option A: Pre-Authentication Container
+Create a special container that can be run interactively:
+```bash
+docker run -it -v claude-auth:/root litellm-claude auth
+```
+This would:
+- Run with TTY for interactive auth
+- Store credentials in a Docker volume
+- Main container uses the same volume
+
+### Option B: OAuth Proxy Service
+Run a separate service on the host that:
+- Handles OAuth flow with browser access
+- Provides tokens to containers via API
+- Manages token refresh automatically
+
+### Option C: Environment Token Injection
+- Authenticate on host with Claude CLI
+- Extract tokens from CLI's internal storage
+- Pass tokens as environment variables to container
+- Container configures CLI to use these tokens
+
+## Next Steps
+
+1. Investigate where Claude CLI actually stores OAuth tokens
+2. Determine if tokens can be extracted and reused
+3. Test if CLI accepts tokens via environment variables
+4. Implement the most viable solution
+
+## Testing Commands
+
+```bash
+# Check auth status in container
+docker exec litellm-claude-litellm-1 claude auth status
+
+# Test API with current setup
+curl -X POST http://localhost:4000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-1234" \
+  -d '{"model": "sonnet", "messages": [{"role": "user", "content": "Hello"}]}'
+```

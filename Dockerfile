@@ -33,6 +33,9 @@ COPY startup.py /app/startup.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+# Create directory for Claude auth with proper permissions
+RUN mkdir -p /root && chmod 755 /root
+
 EXPOSE 4000
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
