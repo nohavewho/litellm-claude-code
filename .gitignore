@@ -3,6 +3,7 @@
 .env.local
 .env.production
 .env.staging
+docker-compose.override.yml
 
 # Logs
 *.log

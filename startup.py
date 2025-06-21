@@ -29,6 +29,12 @@ print("Starting LiteLLM proxy with YAML config...")
 if __name__ == "__main__":
     os.environ['CONFIG_FILE_PATH'] = '/app/config/litellm_config.yaml'
     
+    # Set default development master key if not provided
+    if not os.environ.get('LITELLM_MASTER_KEY'):
+        print("[STARTUP] WARNING: No LITELLM_MASTER_KEY set, using development default 'sk-development-only'")
+        print("[STARTUP] For production, set a secure key using: openssl rand -hex 32")
+        os.environ['LITELLM_MASTER_KEY'] = 'sk-development-only'
+    
     # Import litellm and ensure custom provider is registered
     import litellm
     
