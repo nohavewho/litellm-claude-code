@@ -8,46 +8,44 @@ The LiteLLM Claude Code Provider requires Claude CLI authentication to work. We'
 
 ## First-Time Setup
 
-### 1. Start the Container
+### Web Authentication (Currently Limited)
 
-```bash
-docker-compose up -d
-```
+**Note**: The web authentication interface at `http://localhost:4000/auth` correctly displays authentication status but the interactive login flow is not yet fully functional. Please use the CLI method below for authentication.
 
-### 2. Access the Authentication Page
+### CLI Authentication (Recommended)
 
-Open your browser and navigate to:
-```
-http://localhost:4000/auth
-```
+1. Start the container:
+   ```bash
+   docker-compose up -d
+   ```
 
-### 3. Check Authentication Status
+2. Access the container shell:
+   ```bash
+   docker exec -it litellm-claude-litellm-1 bash
+   ```
 
-The page will show whether you're currently authenticated. If not authenticated, you'll see:
-- A red status box indicating "Not authenticated"
-- A "Start Authentication" button
+3. Run the Claude CLI:
+   ```bash
+   claude
+   ```
 
-### 4. Start Authentication
+4. Follow the interactive prompts:
+   - Choose your preferred theme (press Enter for default)
+   - Select login method: Choose option 1 (Claude account with subscription)
+   - The CLI will display an OAuth URL
+   - Open the URL in your browser and authorize the application
+   - Copy the authorization code and paste it back into the terminal
 
-Click the "Start Authentication" button. This will:
-- Start the Claude CLI authentication process
-- Show a terminal window with the CLI output
-- Display the OAuth URL when it appears
+5. Exit the container shell:
+   ```bash
+   exit
+   ```
 
-### 5. Complete OAuth Flow
-
-1. Click the OAuth URL that appears (or copy and paste it into a new tab)
-2. Sign in to your Claude account
-3. Authorize the application
-4. The browser will redirect to a callback URL (this may show an error page - that's normal)
-5. Return to the authentication page
-
-### 6. Verify Success
-
-Once authentication is complete:
-- The status will turn green showing "Authenticated successfully!"
-- You can now use all API endpoints
-- Authentication persists across container restarts
+6. Verify authentication by checking the web status page:
+   ```
+   http://localhost:4000/auth
+   ```
+   The status should show "Authenticated successfully!"
 
 ## Using the API
 

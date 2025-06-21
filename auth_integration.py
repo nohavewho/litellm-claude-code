@@ -7,6 +7,9 @@ import os
 import asyncio
 import subprocess
 import json
+import pty
+import select
+import fcntl
 from pathlib import Path
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -161,6 +164,19 @@ AUTH_HTML = """
             terminal.scrollTop = terminal.scrollHeight;
         }
         
+        function submitAuthCode() {
+            const input = document.getElementById('auth-code-input');
+            const code = input.value.trim();
+            if (code && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'input',
+                    text: code
+                }));
+                input.disabled = true;
+                input.placeholder = 'Code submitted...';
+            }
+        }
+        
         function startAuth() {
             if (isAuthenticating) return;
             
@@ -189,12 +205,31 @@ AUTH_HTML = """
                     
                     // Check for OAuth URL
                     const urlMatch = data.text.match(/https:\/\/[^\s]+/);
-                    if (urlMatch && data.text.includes('authenticate')) {
+                    if (urlMatch) {
                         const oauthLink = document.getElementById('oauth-link');
                         const oauthUrl = document.getElementById('oauth-url');
                         oauthLink.style.display = 'block';
                         oauthUrl.href = urlMatch[0];
                         oauthUrl.textContent = urlMatch[0];
+                        
+                        // Add input field for auth code if not already present
+                        if (!document.getElementById('auth-code-input')) {
+                            const inputDiv = document.createElement('div');
+                            inputDiv.style.marginTop = '1rem';
+                            inputDiv.innerHTML = `
+                                <label for="auth-code-input">After authorizing, paste your code here:</label>
+                                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                    <input type="text" id="auth-code-input" 
+                                           style="flex: 1; padding: 0.5rem; font-family: monospace;"
+                                           placeholder="Paste authorization code">
+                                    <button onclick="submitAuthCode()" 
+                                            style="padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                        Submit
+                                    </button>
+                                </div>
+                            `;
+                            oauthLink.appendChild(inputDiv);
+                        }
                     }
                 } else if (data.type === 'complete') {
                     addTerminalLine('\\nAuthentication complete!');
@@ -245,43 +280,122 @@ def add_auth_routes(app):
         """Handle interactive Claude CLI authentication via WebSocket."""
         await websocket.accept()
         
+        master_fd = None
+        slave_fd = None
+        
         try:
             # Wait for start signal
             data = await websocket.receive_json()
             if data.get("action") != "start":
                 return
             
-            # Start Claude CLI in interactive mode
+            # Create a pseudo-terminal
+            master_fd, slave_fd = pty.openpty()
+            
+            # Set terminal to non-blocking mode
+            flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+            fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            
+            # Start Claude CLI with the PTY
             process = await asyncio.create_subprocess_exec(
                 "claude",
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
                 env={**os.environ, "TERM": "xterm"}
             )
             
-            # Read output in real-time
+            # Close slave_fd in parent process
+            os.close(slave_fd)
+            slave_fd = None
+            
+            # Track state for the interactive flow
+            state = "waiting_for_theme"
+            
+            async def send_input_when_ready():
+                """Send input based on current state"""
+                await asyncio.sleep(2)  # Initial wait for prompt
+                
+                if state == "waiting_for_theme":
+                    # Select default theme
+                    os.write(master_fd, b"\n")
+                    return "waiting_for_login"
+                elif state == "waiting_for_login":
+                    # Select OAuth login (option 1)
+                    os.write(master_fd, b"\n")
+                    return "waiting_for_url"
+                return state
+            
+            # Initial input sending
+            state = await send_input_when_ready()
+            
+            # Main loop to handle output and input
+            buffer = b""
             while True:
-                # Check if process has output
+                # Check for output from PTY
                 try:
-                    line = await asyncio.wait_for(
-                        process.stdout.readline(), 
-                        timeout=0.1
-                    )
-                    if line:
-                        text = line.decode('utf-8', errors='replace')
-                        await websocket.send_json({
-                            "type": "output",
-                            "text": text.rstrip()
-                        })
+                    output = os.read(master_fd, 4096)
+                    if output:
+                        buffer += output
+                        # Try to decode and send complete lines
+                        while b'\n' in buffer or b'\r' in buffer:
+                            line_end = buffer.find(b'\n')
+                            if line_end == -1:
+                                line_end = buffer.find(b'\r')
+                            if line_end == -1:
+                                break
+                            
+                            line = buffer[:line_end]
+                            buffer = buffer[line_end+1:]
+                            
+                            try:
+                                text = line.decode('utf-8', errors='replace')
+                                # Clean ANSI escape sequences for cleaner output
+                                await websocket.send_json({
+                                    "type": "output",
+                                    "text": text
+                                })
+                                
+                                # State transitions based on output
+                                if state == "waiting_for_theme" and "Choose the text style" in text:
+                                    await asyncio.sleep(0.5)
+                                    os.write(master_fd, b"\n")
+                                    state = "waiting_for_login"
+                                elif state == "waiting_for_login" and "Select login method" in text:
+                                    await asyncio.sleep(0.5)
+                                    os.write(master_fd, b"\n")
+                                    state = "waiting_for_url"
+                                elif "authenticated" in text.lower() or "success" in text.lower():
+                                    await websocket.send_json({"type": "complete"})
+                                    break
+                            except:
+                                pass
                         
-                        # Check for completion
-                        if "success" in text.lower() or "authenticated" in text.lower():
-                            await asyncio.sleep(2)  # Let it finish
-                            await websocket.send_json({"type": "complete"})
-                            break
+                        # Send remaining buffer if it looks complete
+                        if buffer and len(buffer) > 100:
+                            try:
+                                text = buffer.decode('utf-8', errors='replace')
+                                await websocket.send_json({
+                                    "type": "output", 
+                                    "text": text
+                                })
+                                buffer = b""
+                            except:
+                                pass
+                                
+                except OSError:
+                    await asyncio.sleep(0.1)
+                
+                # Check for input from WebSocket
+                try:
+                    data = await asyncio.wait_for(websocket.receive_json(), timeout=0.1)
+                    if data.get("type") == "input":
+                        code = data.get("text", "")
+                        os.write(master_fd, f"{code}\n".encode())
                 except asyncio.TimeoutError:
                     pass
+                except WebSocketDisconnect:
+                    break
                 
                 # Check if process ended
                 if process.returncode is not None:
@@ -302,9 +416,23 @@ def add_auth_routes(app):
                 "message": str(e)
             })
         finally:
+            # Cleanup
+            if master_fd is not None:
+                try:
+                    os.close(master_fd)
+                except:
+                    pass
+            if slave_fd is not None:
+                try:
+                    os.close(slave_fd)
+                except:
+                    pass
             if process and process.returncode is None:
-                process.terminate()
-                await process.wait()
+                try:
+                    process.terminate()
+                    await process.wait()
+                except:
+                    pass
     
     # Add a note in the main docs
     original_description = app.description or ""
