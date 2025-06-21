@@ -8,7 +8,6 @@ import subprocess
 
 # Add paths for custom providers
 sys.path.append('/app')
-sys.path.append('/app/providers')
 
 # The custom provider will be loaded via the YAML config
 print("Starting LiteLLM with custom provider configuration...")

@@ -23,7 +23,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir git+https://github.com/arthurcolle/claude-code-sdk-python.git
 
 # Copy provider code
-COPY providers/ /app/providers/
 COPY claude_code_provider.py /app/claude_code_provider.py
 COPY custom_handler.py /app/custom_handler.py
 COPY config/ /app/config/
