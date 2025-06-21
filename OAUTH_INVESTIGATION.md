@@ -32,7 +32,7 @@ By mounting the host's `~/.claude` directory (not just `~/.claude.json`), we can
 ### Confirmed Working:
 - ✅ Sonnet model: `curl -X POST http://localhost:4000/v1/chat/completions -d '{"model": "sonnet", ...}'`
 - ✅ Opus model: Working correctly
-- ⚠️ Haiku model: Currently disabled upstream in Claude Code (as of last 19 hours)
+- ⚠️ Haiku model: Currently disabled upstream in Claude Code (as of 6/20/25)
 
 ### Model Names:
 - `sonnet`, `opus`, and `default` are aliases for the latest versions (like `:latest` tags)
