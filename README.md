@@ -14,15 +14,21 @@ A generic LiteLLM provider that makes Claude Code SDK available through the stan
 
 ### Prerequisites
 - Docker and Docker Compose
-- Running inside Claude Code environment (for OAuth authentication)
 
-### Start the Provider
+### Setup
 
-```bash
-docker-compose up -d
-```
+1. Start the services:
+   ```bash
+   docker-compose up -d
+   ```
 
-The provider will be available at `http://localhost:4000/v1`
+2. **Authenticate Claude** (first-time only):
+   - Navigate to `http://localhost:4000/auth`
+   - Click "Start Authentication"
+   - Follow the OAuth flow in your browser
+   - See [AUTH_SETUP.md](AUTH_SETUP.md) for detailed instructions
+
+3. The API is now available at `http://localhost:4000/v1`
 
 ### Test with curl
 
@@ -56,13 +62,12 @@ print(response.choices[0].message.content)
 
 ## Available Models
 
-| Model Name | Claude Model | Description |
-|------------|--------------|-------------|
-| `claude-sonnet` | claude-3-5-sonnet-20241022 | Latest Sonnet (alias) |
-| `claude-haiku` | claude-3-5-haiku-20240307 | Latest Haiku (alias) |
-| `claude-3-5-sonnet-20241022` | claude-3-5-sonnet-20241022 | Sonnet with date |
-| `claude-3-5-haiku-20240307` | claude-3-5-haiku-20240307 | Haiku with date |
-| `claude-3-opus-20240229` | claude-3-opus-20240229 | Opus model |
+| Model Name | Description |
+|------------|-------------|
+| `sonnet` | Claude Sonnet (latest version) |
+| `opus` | Claude Opus (latest version) |
+| `default` | Default Claude model |
+| `claude-3-5-haiku-20240307` | Haiku (currently disabled upstream) |
 
 ## Configuration
 
@@ -105,11 +110,13 @@ Any application that uses the OpenAI API format can now use Claude models throug
 
 ## Authentication
 
-This provider uses Claude Code SDK's OAuth authentication, which requires:
-- Running inside Claude Code environment
-- Valid Claude Code session
+This provider uses Claude CLI OAuth authentication:
+- First-time setup requires browser-based OAuth flow
+- Authentication is handled through the integrated web UI at `/auth`
+- Credentials persist in Docker volume across container restarts
+- No API keys needed - uses OAuth tokens
 
-No additional API keys are needed.
+See [AUTH_SETUP.md](AUTH_SETUP.md) for detailed authentication instructions.
 
 ## Development
 

@@ -23,8 +23,10 @@ services:
       - ./config:/app/config:ro
       # Mount provider code for development
       - ./providers:/app/providers:ro
-      # Persistent volume for Claude authentication
-      - claude_auth:/root/.claude_code
+      # Docker volume for persistent Claude CLI authentication
+      # The CLI stores OAuth tokens in ~/.claude/.credentials.json
+      # This volume persists across container restarts
+      - claude-auth:/root/.claude
     env_file:
       - .env
     depends_on:
@@ -34,4 +36,4 @@ services:
 
 volumes:
   postgres_data:
-  claude_auth:
+  claude-auth:

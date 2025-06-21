@@ -28,10 +28,14 @@ COPY claude_code_provider.py /app/claude_code_provider.py
 COPY custom_handler.py /app/custom_handler.py
 COPY config/ /app/config/
 
-# Copy startup script and entrypoint
+# Copy startup script, auth integration, and entrypoint
 COPY startup.py /app/startup.py
+COPY auth_integration.py /app/auth_integration.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+# Create directory for Claude auth with proper permissions
+RUN mkdir -p /root && chmod 755 /root
 
 EXPOSE 4000
 

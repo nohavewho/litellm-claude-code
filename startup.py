@@ -48,5 +48,10 @@ if __name__ == "__main__":
     import uvicorn
     from litellm.proxy.proxy_server import app
     
+    # Add authentication routes
+    from auth_integration import add_auth_routes
+    app = add_auth_routes(app)
+    print("[STARTUP] Added authentication routes to LiteLLM")
+    
     # Start the server
     uvicorn.run(app, host="0.0.0.0", port=4000)
