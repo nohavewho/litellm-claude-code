@@ -15,16 +15,20 @@ from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 import aiofiles
 
-# HTML template for authentication page
+# HTML template for authentication page with xterm.js
 AUTH_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
     <title>Claude Authentication - LiteLLM</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 2rem;
             background: #f5f5f5;
@@ -54,18 +58,14 @@ AUTH_HTML = """
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-        .terminal {
-            background: #1e1e1e;
-            color: #d4d4d4;
+        #terminal-container {
             padding: 1rem;
+            background: #000;
             border-radius: 4px;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 14px;
-            height: 400px;
-            overflow-y: auto;
             display: none;
+            margin-top: 1rem;
         }
-        .terminal.active {
+        #terminal-container.active {
             display: block;
         }
         button {
@@ -85,26 +85,6 @@ AUTH_HTML = """
             background: #6c757d;
             cursor: not-allowed;
         }
-        .oauth-link {
-            display: none;
-            padding: 1rem;
-            background: #e7f3ff;
-            border: 1px solid #b3d9ff;
-            border-radius: 4px;
-            margin: 1rem 0;
-        }
-        .oauth-link a {
-            color: #004085;
-            font-weight: bold;
-        }
-        .info {
-            padding: 1rem;
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 4px;
-            margin: 1rem 0;
-            color: #856404;
-        }
     </style>
 </head>
 <body>
@@ -115,11 +95,6 @@ AUTH_HTML = """
             Checking authentication status...
         </div>
         
-        <div id="oauth-link" class="oauth-link">
-            <p>Please visit the following URL to authenticate:</p>
-            <a id="oauth-url" href="#" target="_blank"></a>
-        </div>
-        
         <button id="auth-btn" onclick="startAuth()" disabled>
             Start Authentication
         </button>
@@ -128,15 +103,15 @@ AUTH_HTML = """
             Back to API Documentation
         </button>
         
-        <div id="info" class="info" style="display: none;">
-            <strong>Tip:</strong> If the process appears stuck, press Enter in the terminal to continue.
+        <div id="terminal-container">
+            <div id="terminal"></div>
         </div>
-        
-        <div id="terminal" class="terminal"></div>
     </div>
     
     <script>
         let ws = null;
+        let term = null;
+        let fitAddon = null;
         let isAuthenticating = false;
         
         async function checkAuthStatus() {
@@ -168,117 +143,90 @@ AUTH_HTML = """
             }
         }
         
-        function addTerminalLine(text) {
-            const terminal = document.getElementById('terminal');
-            const line = document.createElement('div');
-            line.textContent = text;
-            terminal.appendChild(line);
-            terminal.scrollTop = terminal.scrollHeight;
-        }
-        
-        function submitAuthCode() {
-            const input = document.getElementById('auth-code-input');
-            const code = input.value.trim();
-            if (code && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'input',
-                    text: code
-                }));
-                input.disabled = true;
-                input.placeholder = 'Code submitted...';
-            }
-        }
-        
         function startAuth() {
             if (isAuthenticating) return;
             
             isAuthenticating = true;
-            const terminal = document.getElementById('terminal');
+            const terminalContainer = document.getElementById('terminal-container');
             const authBtn = document.getElementById('auth-btn');
-            const info = document.getElementById('info');
             
-            terminal.className = 'terminal active';
-            terminal.innerHTML = '';
+            terminalContainer.className = 'active';
             authBtn.disabled = true;
             authBtn.textContent = 'Authenticating...';
-            info.style.display = 'block';
+            
+            // Initialize xterm.js
+            if (!term) {
+                term = new Terminal({
+                    cursorBlink: true,
+                    fontSize: 14,
+                    fontFamily: 'Consolas, "Liberation Mono", Menlo, Courier, monospace',
+                    theme: {
+                        background: '#1e1e1e',
+                        foreground: '#d4d4d4'
+                    }
+                });
+                
+                fitAddon = new FitAddon.FitAddon();
+                const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+                
+                term.loadAddon(fitAddon);
+                term.loadAddon(webLinksAddon);
+                
+                term.open(document.getElementById('terminal'));
+                fitAddon.fit();
+                
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    fitAddon.fit();
+                });
+            }
+            
+            term.clear();
+            term.writeln('Starting Claude authentication...');
             
             // Connect WebSocket - use wss:// for HTTPS, ws:// for HTTP
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/auth/ws`);
             
             ws.onopen = () => {
-                addTerminalLine('Starting Claude authentication...');
                 ws.send(JSON.stringify({action: 'start'}));
+                
+                // Handle terminal input
+                term.onData(data => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'input',
+                            text: data
+                        }));
+                    }
+                });
             };
             
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 
                 if (data.type === 'output') {
-                    addTerminalLine(data.text);
-                    
-                    // Check for OAuth URL
-                    const urlMatch = data.text.match(/https:\/\/[^\s]+/);
-                    if (urlMatch) {
-                        const oauthLink = document.getElementById('oauth-link');
-                        const oauthUrl = document.getElementById('oauth-url');
-                        oauthLink.style.display = 'block';
-                        oauthUrl.href = urlMatch[0];
-                        oauthUrl.textContent = urlMatch[0];
-                        
-                        // Add input field for auth code if not already present
-                        if (!document.getElementById('auth-code-input')) {
-                            const inputDiv = document.createElement('div');
-                            inputDiv.style.marginTop = '1rem';
-                            inputDiv.innerHTML = `
-                                <label for="auth-code-input">After authorizing, paste your code here:</label>
-                                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <input type="text" id="auth-code-input" 
-                                           style="flex: 1; padding: 0.5rem; font-family: monospace;"
-                                           placeholder="Paste authorization code">
-                                    <button onclick="submitAuthCode()" 
-                                            style="padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                                        Submit
-                                    </button>
-                                </div>
-                            `;
-                            oauthLink.appendChild(inputDiv);
-                        }
-                    }
+                    term.write(data.text);
                 } else if (data.type === 'complete') {
-                    addTerminalLine('\\nAuthentication complete!');
+                    term.writeln('\\r\\nAuthentication complete!');
                     isAuthenticating = false;
-                    info.style.display = 'none';
                     setTimeout(() => checkAuthStatus(), 1000);
                 } else if (data.type === 'error') {
-                    addTerminalLine(`\\nError: ${data.message}`);
+                    term.writeln(`\\r\\nError: ${data.message}`);
                     isAuthenticating = false;
                     authBtn.disabled = false;
                     authBtn.textContent = 'Retry Authentication';
-                    info.style.display = 'none';
                 }
             };
             
             ws.onclose = () => {
                 if (isAuthenticating) {
-                    addTerminalLine('\\nConnection closed unexpectedly.');
+                    term.writeln('\\r\\nConnection closed unexpectedly.');
                     isAuthenticating = false;
                     authBtn.disabled = false;
                     authBtn.textContent = 'Retry Authentication';
-                    info.style.display = 'none';
                 }
             };
-            
-            // Add keyboard event listener for manual Enter press
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'input',
-                        text: ''
-                    }));
-                }
-            });
         }
         
         // Check auth status on load
@@ -330,68 +278,38 @@ def add_auth_routes(app):
                 stdin=slave_fd,
                 stdout=slave_fd,
                 stderr=slave_fd,
-                env={**os.environ, "TERM": "xterm"}
+                env={**os.environ, "TERM": "xterm-256color"}
             )
             
             # Close slave_fd in parent process
             os.close(slave_fd)
             slave_fd = None
             
-            # Track state and buffer for pattern matching
-            state = "waiting_for_theme"
-            full_output = ""
-            sent_theme_response = False
-            sent_login_response = False
-            
             # Main loop to handle output and input
-            buffer = b""
             while True:
                 # Check for output from PTY
                 try:
                     output = os.read(master_fd, 4096)
                     if output:
-                        buffer += output
+                        await websocket.send_json({
+                            "type": "output",
+                            "text": output.decode('utf-8', errors='replace')
+                        })
                         
-                        # Send output to client
-                        try:
-                            text = buffer.decode('utf-8', errors='replace')
-                            await websocket.send_json({
-                                "type": "output",
-                                "text": text
-                            })
-                            full_output += text
-                            buffer = b""
-                            
-                            # Auto-respond to prompts
-                            if not sent_theme_response and ("Choose the text style" in full_output or "Dark mode" in full_output):
-                                await asyncio.sleep(1)
-                                os.write(master_fd, b"\n")
-                                sent_theme_response = True
-                                state = "waiting_for_login"
-                            elif not sent_login_response and sent_theme_response and ("Login method" in full_output or "authenticate" in full_output):
-                                await asyncio.sleep(1)
-                                os.write(master_fd, b"\n")
-                                sent_login_response = True
-                                state = "waiting_for_url"
-                            elif "authenticated" in text.lower() or "success" in text.lower():
-                                await websocket.send_json({"type": "complete"})
-                                break
-                        except:
-                            pass
-                                
+                        # Check for completion
+                        if b"authenticated" in output.lower() or b"success" in output.lower():
+                            await websocket.send_json({"type": "complete"})
+                            break
                 except OSError:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.01)
                 
                 # Check for input from WebSocket
                 try:
-                    data = await asyncio.wait_for(websocket.receive_json(), timeout=0.1)
+                    data = await asyncio.wait_for(websocket.receive_json(), timeout=0.01)
                     if data.get("type") == "input":
-                        code = data.get("text", "")
-                        if code:
-                            os.write(master_fd, f"{code}\n".encode())
-                        else:
-                            # Empty input means just Enter
-                            os.write(master_fd, b"\n")
+                        input_text = data.get("text", "")
+                        if input_text:
+                            os.write(master_fd, input_text.encode())
                 except asyncio.TimeoutError:
                     pass
                 except WebSocketDisconnect:
