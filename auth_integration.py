@@ -97,6 +97,14 @@ AUTH_HTML = """
             color: #004085;
             font-weight: bold;
         }
+        .info {
+            padding: 1rem;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            margin: 1rem 0;
+            color: #856404;
+        }
     </style>
 </head>
 <body>
@@ -119,6 +127,10 @@ AUTH_HTML = """
         <button onclick="window.location='/docs'">
             Back to API Documentation
         </button>
+        
+        <div id="info" class="info" style="display: none;">
+            <strong>Tip:</strong> If the process appears stuck, press Enter in the terminal to continue.
+        </div>
         
         <div id="terminal" class="terminal"></div>
     </div>
@@ -183,11 +195,13 @@ AUTH_HTML = """
             isAuthenticating = true;
             const terminal = document.getElementById('terminal');
             const authBtn = document.getElementById('auth-btn');
+            const info = document.getElementById('info');
             
             terminal.className = 'terminal active';
             terminal.innerHTML = '';
             authBtn.disabled = true;
             authBtn.textContent = 'Authenticating...';
+            info.style.display = 'block';
             
             // Connect WebSocket - use wss:// for HTTPS, ws:// for HTTP
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -235,12 +249,14 @@ AUTH_HTML = """
                 } else if (data.type === 'complete') {
                     addTerminalLine('\\nAuthentication complete!');
                     isAuthenticating = false;
+                    info.style.display = 'none';
                     setTimeout(() => checkAuthStatus(), 1000);
                 } else if (data.type === 'error') {
                     addTerminalLine(`\\nError: ${data.message}`);
                     isAuthenticating = false;
                     authBtn.disabled = false;
                     authBtn.textContent = 'Retry Authentication';
+                    info.style.display = 'none';
                 }
             };
             
@@ -250,8 +266,19 @@ AUTH_HTML = """
                     isAuthenticating = false;
                     authBtn.disabled = false;
                     authBtn.textContent = 'Retry Authentication';
+                    info.style.display = 'none';
                 }
             };
+            
+            // Add keyboard event listener for manual Enter press
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'input',
+                        text: ''
+                    }));
+                }
+            });
         }
         
         // Check auth status on load
@@ -310,25 +337,11 @@ def add_auth_routes(app):
             os.close(slave_fd)
             slave_fd = None
             
-            # Track state for the interactive flow
+            # Track state and buffer for pattern matching
             state = "waiting_for_theme"
-            
-            async def send_input_when_ready():
-                """Send input based on current state"""
-                await asyncio.sleep(2)  # Initial wait for prompt
-                
-                if state == "waiting_for_theme":
-                    # Select default theme
-                    os.write(master_fd, b"\n")
-                    return "waiting_for_login"
-                elif state == "waiting_for_login":
-                    # Select OAuth login (option 1)
-                    os.write(master_fd, b"\n")
-                    return "waiting_for_url"
-                return state
-            
-            # Initial input sending
-            state = await send_input_when_ready()
+            full_output = ""
+            sent_theme_response = False
+            sent_login_response = False
             
             # Main loop to handle output and input
             buffer = b""
@@ -338,51 +351,33 @@ def add_auth_routes(app):
                     output = os.read(master_fd, 4096)
                     if output:
                         buffer += output
-                        # Try to decode and send complete lines
-                        while b'\n' in buffer or b'\r' in buffer:
-                            line_end = buffer.find(b'\n')
-                            if line_end == -1:
-                                line_end = buffer.find(b'\r')
-                            if line_end == -1:
-                                break
-                            
-                            line = buffer[:line_end]
-                            buffer = buffer[line_end+1:]
-                            
-                            try:
-                                text = line.decode('utf-8', errors='replace')
-                                # Clean ANSI escape sequences for cleaner output
-                                await websocket.send_json({
-                                    "type": "output",
-                                    "text": text
-                                })
-                                
-                                # State transitions based on output
-                                if state == "waiting_for_theme" and "Choose the text style" in text:
-                                    await asyncio.sleep(0.5)
-                                    os.write(master_fd, b"\n")
-                                    state = "waiting_for_login"
-                                elif state == "waiting_for_login" and "Select login method" in text:
-                                    await asyncio.sleep(0.5)
-                                    os.write(master_fd, b"\n")
-                                    state = "waiting_for_url"
-                                elif "authenticated" in text.lower() or "success" in text.lower():
-                                    await websocket.send_json({"type": "complete"})
-                                    break
-                            except:
-                                pass
                         
-                        # Send remaining buffer if it looks complete
-                        if buffer and len(buffer) > 100:
-                            try:
-                                text = buffer.decode('utf-8', errors='replace')
-                                await websocket.send_json({
-                                    "type": "output", 
-                                    "text": text
-                                })
-                                buffer = b""
-                            except:
-                                pass
+                        # Send output to client
+                        try:
+                            text = buffer.decode('utf-8', errors='replace')
+                            await websocket.send_json({
+                                "type": "output",
+                                "text": text
+                            })
+                            full_output += text
+                            buffer = b""
+                            
+                            # Auto-respond to prompts
+                            if not sent_theme_response and ("Choose the text style" in full_output or "Dark mode" in full_output):
+                                await asyncio.sleep(1)
+                                os.write(master_fd, b"\n")
+                                sent_theme_response = True
+                                state = "waiting_for_login"
+                            elif not sent_login_response and sent_theme_response and ("Login method" in full_output or "authenticate" in full_output):
+                                await asyncio.sleep(1)
+                                os.write(master_fd, b"\n")
+                                sent_login_response = True
+                                state = "waiting_for_url"
+                            elif "authenticated" in text.lower() or "success" in text.lower():
+                                await websocket.send_json({"type": "complete"})
+                                break
+                        except:
+                            pass
                                 
                 except OSError:
                     await asyncio.sleep(0.1)
@@ -392,7 +387,11 @@ def add_auth_routes(app):
                     data = await asyncio.wait_for(websocket.receive_json(), timeout=0.1)
                     if data.get("type") == "input":
                         code = data.get("text", "")
-                        os.write(master_fd, f"{code}\n".encode())
+                        if code:
+                            os.write(master_fd, f"{code}\n".encode())
+                        else:
+                            # Empty input means just Enter
+                            os.write(master_fd, b"\n")
                 except asyncio.TimeoutError:
                     pass
                 except WebSocketDisconnect:
