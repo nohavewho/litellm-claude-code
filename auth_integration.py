@@ -189,8 +189,9 @@ AUTH_HTML = """
             authBtn.disabled = true;
             authBtn.textContent = 'Authenticating...';
             
-            // Connect WebSocket
-            ws = new WebSocket(`ws://${window.location.host}/auth/ws`);
+            // Connect WebSocket - use wss:// for HTTPS, ws:// for HTTP
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/auth/ws`);
             
             ws.onopen = () => {
                 addTerminalLine('Starting Claude authentication...');
